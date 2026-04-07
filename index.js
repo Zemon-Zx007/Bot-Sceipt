@@ -5,18 +5,25 @@ const {
     TextInputBuilder, TextInputStyle 
 } = require('discord.js');
 const translate = require('@iamtraction/google-translate'); 
-const express = require('express'); // เพิ่มตรงนี้ค้าบ
-const path = require('path'); // เพิ่มตรงนี้ค้าบ
+const express = require('express');
+const path = require('path');
+
+// --- แก้ไขปัญหา Error บน Railway ---
+if (typeof ReadableStream === 'undefined') {
+    const { ReadableStream } = require('node:stream/web');
+    global.ReadableStream = ReadableStream;
+}
+// ---------------------------------
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ระบบหน้าเว็บสวยๆ ของซีม่อน
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
-app.listen(port, () => {
-    console.log(`🌐 หน้าเว็บออนไลน์แล้วที่ Port: ${port}`);
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 Dashboard Online on port ${port}`);
 });
 
 const client = new Client({
@@ -26,7 +33,7 @@ const client = new Client({
 
 const TOKEN = process.env.TOKEN;
 const OWNER_ID = process.env.OWNER_ID;
-const MAIN_BANNER = "https://cdn.discordapp.com/attachments/1480814533214732308/1491139952409448498/IMG_2030.gif?ex=69d69bcc&is=69d54a4c&hm=410822760ed527fdf607e3871ef91cd7b57acdd3f1a3cadf6104be62e645d3fe&";
+const MAIN_BANNER = "https://cdn.discordapp.com/attachments/1480814533214732308/1491139952409448498/IMG_2030.gif";
 
 let scriptData = []; 
 const userSelections = new Map();
@@ -39,9 +46,7 @@ async function autoTranslate(text) {
         const targetLang = isThai ? 'en' : 'th';
         const res = await translate(text, { to: targetLang });
         return res.text;
-    } catch (e) {
-        return text; 
-    }
+    } catch (e) { return text; }
 }
 
 client.once('ready', async () => {
@@ -94,17 +99,15 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined || selIdx === 'none') {
-             return interaction.reply({ content: `❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
-        }
+        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
 
         const script = scriptData[parseInt(selIdx)];
         let timeLeft = 60;
 
         const getEmbed = (time) => new EmbedBuilder()
             .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
-            .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\n\`${script.code}\` \n\n⏳ (ข้อความนี้จะลบอัตโนมัติใน ${time} วินาที)`)
-            .setColor('#2b2d31')
+            .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\n\`${script.code}\` \n\n⏳ (ลบใน ${time} วิ)`)
+            .setColor('#ff0000') // เปลี่ยนเป็นสีแดงตามโทน
             .setImage(script.image || null)
             .setThumbnail(MAIN_BANNER);
 
@@ -128,26 +131,26 @@ client.on('interactionCreate', async interaction => {
 
 async function updateAdminPanel(target, isEdit) {
     const adminEmbed = new EmbedBuilder()
-        .setTitle('⚙️ SWIFT HUB - ADMIN SYSTEM')
-        .setDescription(`ยินดีต้อนรับค่ะซีม่อน! กดปุ่มเพื่อเติมสคริปต์ใหม่\n\n📊 **จำนวนสคริปต์ปัจจุบัน**\n${scriptData.length} รายการ`)
-        .setColor('#ff69b4');
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เติมสคริปต์ใหม่').setStyle(ButtonStyle.Primary));
+        .setTitle('⚙️ SWIFT HUB - ADMIN')
+        .setDescription(`ยินดีต้อนรับค่ะซีม่อน! จัดการสคริปต์ได้ที่นี่เลย\n\n📊 **รายการปัจจุบัน:** ${scriptData.length} สคริปต์`)
+        .setColor('#ff0000');
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เพิ่มสคริปต์').setStyle(ButtonStyle.Danger));
     return isEdit ? await target.edit({ embeds: [adminEmbed], components: [row] }) : await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
 }
 
 async function sendMemberPanel(target, isUpdate) {
     const scriptList = scriptData.length > 0 
-        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} / ${s.translated}`).join('\n')
-        : '*ยังไม่มีสคริปต์ในตอนนี้*';
+        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} (${s.translated})`).join('\n')
+        : '*ยังไม่มีสคริปต์*';
     const embed = new EmbedBuilder()
         .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
-        .setDescription('━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📜 **สคริปต์ที่มีในตอนนี้:**\n' + scriptList + '\n\n👋 **วิธีใช้งาน:**\n1️⃣ เลือกสคริปต์ด้านล่าง\n2️⃣ กดปุ่มรับสคริปต์\n\n📌 หมายเหตุ: จิ้มที่ตัวโค้ดเพื่อคัดลอกทันที\n━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        .setColor('#00ff7f').setImage(MAIN_BANNER).setTimestamp();
+        .setDescription('━━━━━━━━━━━━━━━━━━━━\n\n📜 **รายการสคริปต์:**\n' + scriptList + '\n\n━━━━━━━━━━━━━━━━━━━━')
+        .setColor('#ff0000').setImage(MAIN_BANNER).setTimestamp();
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_script').setPlaceholder('📂 --- คลิกเพื่อเลือกสคริปต์ที่นี่ ---')
-        .addOptions(scriptData.length > 0 ? scriptData.map((s, index) => ({ label: `${index + 1}. ${s.name}`, value: index.toString() })) : [{ label: 'รอเติมสคริปต์...', value: 'none' }]);
+        .setCustomId('select_script').setPlaceholder('📂 --- เลือกสคริปต์ที่นี่ ---')
+        .addOptions(scriptData.length > 0 ? scriptData.map((s, index) => ({ label: `${index + 1}. ${s.name}`, value: index.toString() })) : [{ label: 'รอสคริปต์...', value: 'none' }]);
     const row1 = new ActionRowBuilder().addComponents(selectMenu);
-    const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('get_script_btn').setLabel('📥 รับสคริปต์ (Get Script)').setStyle(ButtonStyle.Success));
+    const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('get_script_btn').setLabel('📥 รับสคริปต์ (Get Script)').setStyle(ButtonStyle.Danger));
     return isUpdate ? await target.edit({ embeds: [embed], components: [row1, row2] }) : await target.reply({ embeds: [embed], components: [row1, row2], fetchReply: true });
 }
 
