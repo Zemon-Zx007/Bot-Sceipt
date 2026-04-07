@@ -7,7 +7,6 @@ const {
     ButtonBuilder, 
     ButtonStyle, 
     EmbedBuilder, 
-    SlashCommandBuilder, 
     REST, 
     Routes,
     ModalBuilder,
@@ -26,7 +25,8 @@ const OWNER_ID = process.env.OWNER_ID;
 // เก็บข้อมูลสคริปต์ และตัวแปรควบคุม Panel
 let scriptData = []; 
 const userSelections = new Map();
-let mainPanelMessage = null; // เก็บ Interaction/Message ของ Panel หลักไว้ Update
+let mainPanelMessage = null; // สำหรับหน้าสมาชิก
+let adminPanelMessage = null; // สำหรับหน้าแอดมิน (ป้องกันการเด้งซ้อน)
 
 client.once('ready', async () => {
     console.log(`🌸 ปายพร้อมรับใช้ซีม่อนแล้วค่ะ! Logged in as ${client.user.tag}`);
@@ -42,14 +42,13 @@ client.on('interactionCreate', async interaction => {
     // --- 1. หน้า Panel สำหรับสมาชิก ---
     if (interaction.commandName === 'zemon-setup') {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
-        const msg = await sendMemberPanel(interaction, false);
-        mainPanelMessage = msg; // จำไว้ว่านี่คือ Panel หลัก
+        mainPanelMessage = await sendMemberPanel(interaction, false);
     }
 
     // --- 2. หน้า Admin สำหรับจัดการ ---
     if (interaction.commandName === 'zemon-admin') {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
-        await updateAdminPanel(interaction, false);
+        adminPanelMessage = await updateAdminPanel(interaction, false);
     }
 
     // --- 3. ปุ่ม Admin Add ---
@@ -62,19 +61,22 @@ client.on('interactionCreate', async interaction => {
         await interaction.showModal(modal);
     }
 
-    // --- 4. บันทึกสคริปต์ (Real-time Update) ---
+    // --- 4. บันทึกสคริปต์ (แก้ปัญหาเด้งซ้อน) ---
     if (interaction.isModalSubmit() && interaction.customId === 'modal_add_script') {
         const name = interaction.fields.getTextInputValue('in_name');
         const code = interaction.fields.getTextInputValue('in_code');
         const image = interaction.fields.getTextInputValue('in_img') || null;
         scriptData.push({ name, code, image });
 
-        await interaction.reply({ content: `✅ เพิ่มสคริปต์ **${name}** แล้ว! กำลังอัปเดต Panel ทั้งหมด...`, ephemeral: true });
+        // ตอบกลับแค่ให้ Modal หายไป (ไม่ส่ง Embed ใหม่ซ้อน)
+        await interaction.reply({ content: `✅ เพิ่มสคริปต์ **${name}** เรียบร้อย!`, ephemeral: true });
 
-        // อัปเดตหน้า Admin ให้ตัวเลขขยับ
-        await updateAdminPanel(interaction, true);
+        // อัปเดตหน้า Admin เดิม (ถ้ามีอยู่)
+        if (adminPanelMessage) {
+            await updateAdminPanel(adminPanelMessage, true);
+        }
         
-        // อัปเดตหน้า Panel หลัก (ถ้ามีคนสร้างไว้แล้ว)
+        // อัปเดตหน้า Panel สมาชิกเดิม (ถ้ามีอยู่)
         if (mainPanelMessage) {
             await sendMemberPanel(mainPanelMessage, true);
         }
@@ -86,7 +88,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferUpdate(); 
     }
 
-    // --- 6. ปุ่มรับสคริปต์ + Countdown 1 นาที ---
+    // --- 6. ปุ่มรับสคริปต์ + Countdown ---
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
         if (selIdx === undefined) {
@@ -102,15 +104,13 @@ client.on('interactionCreate', async interaction => {
             .setColor('#2b2d31')
             .setImage(script.image || null);
 
-        const reply = await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true, fetchReply: true });
+        await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true });
 
-        // ระบบนับถอยหลังขยับจริง
         const timer = setInterval(async () => {
-            timeLeft -= 5; // ลดทีละ 5 วิเพื่อไม่ให้ Rate limit
+            timeLeft -= 5;
             if (timeLeft <= 0) {
                 clearInterval(timer);
                 try { await interaction.deleteReply(); } catch(e){}
-                // รีเซ็ต Dropdown หน้าหลัก
                 userSelections.delete(interaction.user.id);
                 if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
             } else {
@@ -120,8 +120,8 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// ฟังก์ชันสร้าง/อัปเดตหน้า Admin
-async function updateAdminPanel(interaction, isEdit) {
+// ฟังก์ชันสร้าง/อัปเดตหน้า Admin (แก้ให้ Edit ของเดิม)
+async function updateAdminPanel(target, isEdit) {
     const adminEmbed = new EmbedBuilder()
         .setTitle('⚙️ SWIFT HUB - ADMIN SYSTEM')
         .setDescription('ยินดีต้อนรับค่ะซีม่อน! กดปุ่มเพื่อเติมสคริปต์ใหม่\nข้อมูลจะถูกอัปเดตไปหน้า Panel สมาชิกทันที')
@@ -133,13 +133,15 @@ async function updateAdminPanel(interaction, isEdit) {
     );
 
     if (isEdit) {
-        await interaction.editReply({ embeds: [adminEmbed], components: [row] }).catch(()=>{});
+        // อัปเดตจาก Message หรือ Interaction เดิม
+        if (target.edit) return await target.edit({ embeds: [adminEmbed], components: [row] }).catch(()=>{});
+        if (target.message) return await target.message.edit({ embeds: [adminEmbed], components: [row] }).catch(()=>{});
     } else {
-        await interaction.reply({ embeds: [adminEmbed], components: [row] });
+        return await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
     }
 }
 
-// ฟังก์ชันสร้าง/อัปเดตหน้า Panel สมาชิก (Real-time)
+// ฟังก์ชันสร้าง/อัปเดตหน้า Panel สมาชิก
 async function sendMemberPanel(target, isUpdate) {
     const scriptList = scriptData.length > 0 
         ? scriptData.map((s, i) => `**${i + 1}.** ${s.name}`).join('\n')
@@ -173,7 +175,6 @@ async function sendMemberPanel(target, isUpdate) {
     );
 
     if (isUpdate) {
-        // ถ้าเป็นการอัปเดต ให้หา Message เดิมมา Edit
         if (target.edit) return await target.edit({ embeds: [embed], components: [row1, row2] }).catch(()=>{});
         if (target.message) return await target.message.edit({ embeds: [embed], components: [row1, row2] }).catch(()=>{});
     } else {
