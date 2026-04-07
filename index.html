@@ -3,64 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SWIFT HUB | Monitoring</title>
+    <title>SWIFT HUB | Real-time Monitoring</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500;700&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --main-red: #ff0000; --bg-dark: #0a0a0a; --card-bg: #141414; }
         body {
-            margin: 0; padding: 20px 0;
-            background-color: var(--bg-dark);
-            color: #ffffff;
-            font-family: 'Kanit', sans-serif;
-            display: flex; flex-direction: column;
-            align-items: center; min-height: 100vh;
+            margin: 0; padding: 20px 0; background-color: var(--bg-dark);
+            color: #ffffff; font-family: 'Kanit', sans-serif;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
         }
         .container { width: 90%; max-width: 400px; text-align: center; }
-        h1 { color: var(--main-red); margin: 0; font-size: 32px; text-shadow: 0 0 15px rgba(255,0,0,0.6); font-weight: 700; }
-        .online-text { color: var(--main-red); font-size: 14px; margin-bottom: 25px; font-weight: 300; letter-spacing: 1px; }
-        .dot { height: 8px; width: 8px; background: var(--main-red); border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px var(--main-red); animation: pulse 1.5s infinite; }
-        
+        h1 { color: var(--main-red); margin: 0; font-size: 32px; text-shadow: 0 0 15px rgba(255,0,0,0.6); }
+        .online-text { color: var(--main-red); font-size: 14px; margin-bottom: 25px; }
+        .dot { height: 8px; width: 8px; background: var(--main-red); border-radius: 50%; display: inline-block; margin-right: 8px; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-        /* กรอบแสดงบอท */
         #bot-list { width: 100%; display: flex; flex-direction: column; gap: 15px; }
         .bot-card {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 20px;
-            border: 1.5px solid var(--main-red);
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.15);
-            transition: 0.3s;
+            background: var(--card-bg); padding: 20px; border-radius: 20px;
+            border: 1.5px solid var(--main-red); box-shadow: 0 0 20px rgba(255, 0, 0, 0.15);
+            animation: fadeIn 0.5s ease;
         }
-        .bot-card:hover { transform: scale(1.02); box-shadow: 0 0 25px rgba(255, 0, 0, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .bot-identity {
-            display: flex; flex-direction: column;
-            align-items: center; border-bottom: 1px solid #333;
-            padding-bottom: 15px; margin-bottom: 15px;
-        }
-        .bot-avatar {
-            width: 85px; height: 85px;
-            border-radius: 50%;
-            border: 3px solid var(--main-red);
-            object-fit: cover;
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
-            margin-bottom: 12px;
-        }
-        .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .bot-identity { display: flex; flex-direction: column; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px; }
+        .bot-avatar { width: 85px; height: 85px; border-radius: 50%; border: 3px solid var(--main-red); object-fit: cover; margin-bottom: 12px; }
+        .stat-label { font-size: 10px; color: #888; text-transform: uppercase; }
         .bot-name-val { font-size: 18px; color: #ffffff; font-weight: 500; }
-
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .stat-item { text-align: center; }
         .stat-value { font-size: 20px; font-weight: 700; color: var(--main-red); }
 
-        .welcome-msg { font-size: 13px; color: #bbb; line-height: 1.6; margin: 25px 0; }
-        .btn {
-            display: block; background: var(--main-red); color: white;
-            text-decoration: none; padding: 16px; border-radius: 15px;
-            font-weight: bold; transition: 0.3s; box-shadow: 0 5px 15px rgba(255,0,0,0.4);
-        }
-        .btn:hover { background: #cc0000; transform: translateY(-3px); }
+        .welcome-msg { font-size: 13px; color: #bbb; margin: 25px 0; }
+        .btn { display: block; background: var(--main-red); color: white; text-decoration: none; padding: 16px; border-radius: 15px; font-weight: bold; }
         footer { margin-top: 30px; font-size: 10px; color: #444; letter-spacing: 2px; }
     </style>
 </head>
@@ -69,31 +44,41 @@
         <h1>SWIFT HUB</h1>
         <div class="online-text"><span class="dot"></span> SYSTEM ONLINE</div>
         
-        <div id="bot-list"></div>
+        <div id="bot-list">
+            </div>
 
-        <p class="welcome-msg">
-            สถานะการทำงานของบอทปกติ<br>พร้อมให้บริการสมาชิกทุกคนแล้วค่ะ!
-        </p>
-        
+        <p class="welcome-msg">สถานะการทำงานของบอทปกติ<br>พร้อมให้บริการซีม่อนและสมาชิกทุกคนแล้วค่ะ!</p>
         <a href="https://discord.com" class="btn">OPEN DISCORD</a>
         <footer>POWERED BY PAI & ZEMON</footer>
     </div>
 
     <script>
-        async function updateBotList() {
-            try {
-                const response = await fetch('/api/bots');
-                const bots = await response.json();
-                const listContainer = document.getElementById('bot-list');
-                
-                listContainer.innerHTML = ''; // เคลียร์ของเก่า
+        const socket = io();
+        const listContainer = document.getElementById('bot-list');
 
-                bots.forEach(bot => {
-                    const ping = Math.floor(Math.random() * (45 - 20 + 1)) + 20;
-                    const stable = (Math.random() * (99.9 - 99.7) + 99.7).toFixed(1);
-                    
-                    const card = `
-                        <div class="bot-card">
+        socket.on('update-bots', (bots) => {
+            // สร้าง Map ของบอทปัจจุบันที่แสดงอยู่
+            const currentBots = Array.from(listContainer.children).map(c => c.dataset.id);
+            const newBotIds = bots.map(b => b.id);
+
+            // 1. ลบบอทที่ไม่ได้อยู่ในรายชื่อใหม่ (ซีม่อนเตะออก)
+            currentBots.forEach(id => {
+                if (!newBotIds.includes(id)) {
+                    const el = document.querySelector(`[data-id="${id}"]`);
+                    if (el) el.remove();
+                }
+            });
+
+            // 2. เพิ่มหรืออัปเดตบอท (บอทใหม่เข้า)
+            bots.forEach(bot => {
+                let card = document.querySelector(`[data-id="${bot.id}"]`);
+                const ping = Math.floor(Math.random() * 25) + 20;
+                const stable = (99.8 + Math.random() * 0.1).toFixed(1);
+
+                if (!card) {
+                    // ถ้ายังไม่มีการ์ด ให้สร้างใหม่และแสดงค้างไว้เลย
+                    const html = `
+                        <div class="bot-card" data-id="${bot.id}">
                             <div class="bot-identity">
                                 <img src="${bot.avatar}" class="bot-avatar" alt="${bot.name}">
                                 <span class="stat-label">BOT NAME</span>
@@ -109,18 +94,11 @@
                                     <span class="stat-value">${stable}%</span>
                                 </div>
                             </div>
-                        </div>
-                    `;
-                    listContainer.innerHTML += card;
-                });
-            } catch (err) {
-                console.error("Fetch Error:", err);
-            }
-        }
-
-        // อัปเดตข้อมูลบอททุก 5 วินาที (Real-time)
-        setInterval(updateBotList, 5000);
-        updateBotList(); // รันครั้งแรกทันที
+                        </div>`;
+                    listContainer.insertAdjacentHTML('beforeend', html);
+                }
+            });
+        });
     </script>
 </body>
 </html>
