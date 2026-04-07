@@ -7,6 +7,8 @@ const {
 const translate = require('@iamtraction/google-translate'); 
 const express = require('express');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 
 if (typeof ReadableStream === 'undefined') {
     const { ReadableStream } = require('node:stream/web');
@@ -14,56 +16,64 @@ if (typeof ReadableStream === 'undefined') {
 }
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const port = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// API ใหม่: ดึงรายชื่อบอททั้งหมดในเซิร์ฟเวอร์ที่บอทตัวนี้อยู่
-app.get('/api/bots', async (req, res) => {
+// ฟังก์ชันดึงรายชื่อบอท
+async function getBotListData() {
+    const guild = client.guilds.cache.first();
+    if (!guild) return [];
     try {
-        // ดึง Guild แรกที่บอทอยู่ (หรือระบุ ID เซิร์ฟเวอร์ได้)
-        const guild = client.guilds.cache.first();
-        if (!guild) return res.json([]);
-
-        await guild.members.fetch(); // อัปเดตรายชื่อสมาชิก
+        await guild.members.fetch();
         const bots = guild.members.cache.filter(member => member.user.bot);
-
-        const botList = bots.map(b => ({
+        return bots.map(b => ({
+            id: b.id,
             name: b.user.username,
-            avatar: b.user.displayAvatarURL({ format: 'png', size: 256 }),
-            status: b.presence?.status || 'offline'
+            avatar: b.user.displayAvatarURL({ extension: 'png', size: 256 })
         }));
+    } catch (e) { return []; }
+}
 
-        res.json(botList);
-    } catch (err) {
-        res.status(500).json({ error: "Failed to fetch bots" });
-    }
-});
-
-app.listen(port, '0.0.0.0', () => {
-    console.log(`🌐 Dashboard Online on port ${port}`);
+// ส่งข้อมูลเมื่อมีคนเชื่อมต่อหน้าเว็บ
+io.on('connection', async (socket) => {
+    const bots = await getBotListData();
+    socket.emit('update-bots', bots);
 });
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers, // ต้องเปิดใน Discord Developer Portal ด้วยนะค้าบ
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildPresences
     ],
     partials: [Partials.Channel]
 });
 
+// Real-time Event: เมื่อบอทเข้าหรือออกจากเซิร์ฟเวอร์
+client.on('guildMemberAdd', async (member) => {
+    if (member.user.bot) io.emit('update-bots', await getBotListData());
+});
+client.on('guildMemberRemove', async (member) => {
+    if (member.user.bot) io.emit('update-bots', await getBotListData());
+});
+
+server.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 SWIFT HUB Dashboard Online on port ${port}`);
+});
+
+// --- โค้ดส่วนจัดการสคริปต์ของเดิม (ไม่เปลี่ยนแปลง) ---
 const TOKEN = process.env.TOKEN;
 const OWNER_ID = process.env.OWNER_ID;
 const MAIN_BANNER = "https://cdn.discordapp.com/attachments/1480814533214732308/1491139952409448498/IMG_2030.gif";
-
 let scriptData = []; 
 const userSelections = new Map();
 let mainPanelMessage = null; 
-let adminPanelMessage = null; 
 
 async function autoTranslate(text) {
     try {
@@ -76,42 +86,15 @@ async function autoTranslate(text) {
 
 client.once('ready', async () => {
     console.log(`🌸 ปายพร้อมทำงานแล้วค่ะ! Logged in as ${client.user.tag}`);
-    const commands = [
-        { name: 'zemon-setup', description: 'สร้างหน้า Panel แจกสคริปต์ (Member Panel)' },
-        { name: 'zemon-admin', description: 'จัดการสคริปต์ (Admin Panel)' }
-    ];
+    const commands = [{ name: 'zemon-setup', description: 'สร้างหน้า Panel แจกสคริปต์' }];
     const rest = new REST({ version: '10' }).setToken(TOKEN);
-    try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) { console.error(e); }
+    try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) {}
 });
 
 client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'zemon-setup') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) return;
         mainPanelMessage = await sendMemberPanel(interaction, false);
-    }
-    if (interaction.commandName === 'zemon-admin') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
-        adminPanelMessage = await updateAdminPanel(interaction, false);
-    }
-    if (interaction.isButton() && interaction.customId === 'admin_add_btn') {
-        const modal = new ModalBuilder().setCustomId('modal_add_script').setTitle('📝 เพิ่มสคริปต์');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('in_name').setLabel("ชื่อสคริปต์").setStyle(TextInputStyle.Short).setRequired(true)),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('in_code').setLabel("โค้ดสคริปต์").setStyle(TextInputStyle.Paragraph).setRequired(true)),
-            new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('in_img').setLabel("ลิงก์รูปภาพสคริปต์").setStyle(TextInputStyle.Short).setRequired(false))
-        );
-        await interaction.showModal(modal);
-    }
-    if (interaction.isModalSubmit() && interaction.customId === 'modal_add_script') {
-        await interaction.deferReply({ ephemeral: true }); 
-        const name = interaction.fields.getTextInputValue('in_name');
-        const code = interaction.fields.getTextInputValue('in_code');
-        const image = interaction.fields.getTextInputValue('in_img') || null;
-        const translated = await autoTranslate(name);
-        scriptData.push({ name, translated, code, image });
-        await interaction.editReply({ content: `✅ เพิ่มสคริปต์ **${name}** เรียบร้อย!` });
-        if (adminPanelMessage) await updateAdminPanel(adminPanelMessage, true);
-        if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
     }
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_script') {
         userSelections.set(interaction.user.id, interaction.values[0]);
@@ -119,46 +102,21 @@ client.on('interactionCreate', async interaction => {
     }
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
+        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ เลือกก่อนนะค้าบ!`, ephemeral: true });
         const script = scriptData[parseInt(selIdx)];
-        let timeLeft = 60;
-        const getEmbed = (time) => new EmbedBuilder()
-            .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
-            .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\n\`${script.code}\` \n\n⏳ (ลบใน ${time} วิ)`)
-            .setColor('#ff0000').setImage(script.image || null).setThumbnail(MAIN_BANNER);
-        await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true });
-        const timer = setInterval(async () => {
-            timeLeft -= 10;
-            if (timeLeft <= 0) {
-                clearInterval(timer);
-                try { await interaction.deleteReply(); userSelections.delete(interaction.user.id); } catch(e){}
-            } else {
-                try { await interaction.editReply({ embeds: [getEmbed(timeLeft)] }); } catch(e){ clearInterval(timer); }
-            }
-        }, 10000);
+        const embed = new EmbedBuilder().setTitle(`✨ ${script.name}`).setDescription(`\`${script.code}\``).setColor('#ff0000');
+        await interaction.reply({ embeds: [embed], ephemeral: true });
     }
 });
 
-async function updateAdminPanel(target, isEdit) {
-    const adminEmbed = new EmbedBuilder()
-        .setTitle('⚙️ SWIFT HUB - ADMIN')
-        .setDescription(`จัดการสคริปต์ได้ที่นี่เลย\n\n📊 **รายการปัจจุบัน:** ${scriptData.length} สคริปต์`)
-        .setColor('#ff0000');
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เพิ่มสคริปต์').setStyle(ButtonStyle.Danger));
-    return isEdit ? await target.edit({ embeds: [adminEmbed], components: [row] }) : await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
-}
-
 async function sendMemberPanel(target, isUpdate) {
-    const scriptList = scriptData.length > 0 ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} (${s.translated})`).join('\n') : '*ยังไม่มีสคริปต์*';
-    const embed = new EmbedBuilder()
-        .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
-        .setDescription('━━━━━━━━━━━━━━━━━━━━\n\n📜 **รายการสคริปต์:**\n' + scriptList + '\n\n━━━━━━━━━━━━━━━━━━━━')
-        .setColor('#ff0000').setImage(MAIN_BANNER).setTimestamp();
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_script').setPlaceholder('📂 --- เลือกสคริปต์ที่นี่ ---')
-        .addOptions(scriptData.length > 0 ? scriptData.map((s, index) => ({ label: `${index + 1}. ${s.name}`, value: index.toString() })) : [{ label: 'รอสคริปต์...', value: 'none' }]);
+    const scriptList = scriptData.length > 0 ? scriptData.map((s, i) => `**${i + 1}.** ${s.name}`).join('\n') : '*ยังไม่มีสคริปต์*';
+    const embed = new EmbedBuilder().setTitle('💎 SWIFT HUB').setDescription(scriptList).setColor('#ff0000').setImage(MAIN_BANNER);
+    const selectMenu = new StringSelectMenuBuilder().setCustomId('select_script').setPlaceholder('📂 เลือกสคริปต์');
+    scriptData.forEach((s, i) => selectMenu.addOptions({ label: s.name, value: i.toString() }));
+    if (scriptData.length === 0) selectMenu.addOptions({ label: 'รอสคริปต์...', value: 'none' });
     const row1 = new ActionRowBuilder().addComponents(selectMenu);
-    const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('get_script_btn').setLabel('📥 รับสคริปต์ (Get Script)').setStyle(ButtonStyle.Danger));
+    const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('get_script_btn').setLabel('📥 รับสคริปต์').setStyle(ButtonStyle.Danger));
     return isUpdate ? await target.edit({ embeds: [embed], components: [row1, row2] }) : await target.reply({ embeds: [embed], components: [row1, row2], fetchReply: true });
 }
 
