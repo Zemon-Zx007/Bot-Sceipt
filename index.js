@@ -4,7 +4,6 @@ const {
     EmbedBuilder, REST, Routes, ModalBuilder, 
     TextInputBuilder, TextInputStyle 
 } = require('discord.js');
-const translate = require('@iamtraction/google-translate'); 
 const express = require('express');
 const path = require('path');
 const http = require('http');
@@ -25,7 +24,7 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildPresences, // ตัวนี้สำคัญมาก ทำให้เช็กสถานะออนไลน์ได้
         GatewayIntentBits.MessageContent
     ],
     partials: [Partials.Channel, Partials.Message, Partials.User]
@@ -40,45 +39,47 @@ const userSelections = new Map();
 let mainPanelMessage = null; 
 let adminPanelMessage = null; 
 
-// --- ระบบ Monitoring หน้าเว็บ ---
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// ฟังก์ชันดึงบอทและเช็กสถานะจริง 100%
 async function getBotListData() {
     try {
         const guild = client.guilds.cache.first();
         if (!guild) return [];
         await guild.members.fetch();
+        
         const bots = guild.members.cache.filter(member => member.user.bot);
-        return bots.map(b => ({
-            id: b.id,
-            name: b.user.username,
-            avatar: b.user.displayAvatarURL({ extension: 'png', size: 256 })
-        }));
+        
+        return bots.map(b => {
+            // ดึงสถานะจริงๆ จากเซิร์ฟเวอร์ ถ้าไม่เจอแปลว่าออฟไลน์
+            const status = b.presence ? b.presence.status : 'offline';
+            return {
+                id: b.id,
+                name: b.user.username,
+                avatar: b.user.displayAvatarURL({ extension: 'png', size: 256 }),
+                status: status 
+            };
+        });
     } catch (e) { return []; }
 }
 
 io.on('connection', async (socket) => {
-    const bots = await getBotListData();
-    socket.emit('update-bots', bots);
+    socket.emit('update-bots', await getBotListData());
+    socket.on('request-update', async () => {
+        socket.emit('update-bots', await getBotListData());
+    });
 });
 
+// อัปเดตเมื่อมีคนเข้า/ออก หรือเปลี่ยนสถานะ
+client.on('presenceUpdate', async (oldPresence, newPresence) => {
+    if (newPresence.user?.bot) io.emit('update-bots', await getBotListData());
+});
 client.on('guildMemberAdd', async (m) => { if(m.user.bot) io.emit('update-bots', await getBotListData()); });
 client.on('guildMemberRemove', async (m) => { if(m.user.bot) io.emit('update-bots', await getBotListData()); });
 
-// --- ฟังก์ชันช่วย (Utility) ---
-async function autoTranslate(text) {
-    try {
-        const isThai = /[ก-ฮ]/.test(text);
-        const targetLang = isThai ? 'en' : 'th';
-        const res = await translate(text, { to: targetLang });
-        return res.text;
-    } catch (e) { return text; }
-}
-
-// --- ระบบ Panel ของซีม่อน ---
-
+// --- ระบบ Panel ของบอท ---
 async function updateAdminPanel(target, isEdit) {
     const adminEmbed = new EmbedBuilder()
         .setTitle('⚙️ SWIFT HUB - ADMIN')
@@ -91,11 +92,11 @@ async function updateAdminPanel(target, isEdit) {
 }
 
 async function sendMemberPanel(target, isUpdate) {
-    const scriptList = scriptData.length > 0 ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} (${s.translated})`).join('\n') : '*ยังไม่มีสคริปต์*';
+    const scriptList = scriptData.length > 0 ? scriptData.map((s, i) => `**${i + 1}.** ${s.name}`).join('\n') : '*ยังไม่มีสคริปต์*';
     const embed = new EmbedBuilder()
         .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
         .setDescription('━━━━━━━━━━━━━━━━━━━━\n\n📜 **รายการสคริปต์:**\n' + scriptList + '\n\n━━━━━━━━━━━━━━━━━━━━')
-        .setColor('#ff0000').setImage(MAIN_BANNER).setTimestamp();
+        .setColor('#ff0000').setImage(MAIN_BANNER);
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('select_script').setPlaceholder('📂 --- เลือกสคริปต์ที่นี่ ---')
@@ -110,25 +111,23 @@ async function sendMemberPanel(target, isUpdate) {
 client.once('ready', async () => {
     console.log(`✅ [SYSTEM] ${client.user.tag} ONLINE`);
     const commands = [
-        { name: 'zemon-setup', description: 'สร้างหน้า Panel แจกสคริปต์ (Member Panel)' },
-        { name: 'zemon-admin', description: 'จัดการสคริปต์ (Admin Panel)' }
+        { name: 'zemon-setup', description: 'หน้า Panel แจกสมาชิก' },
+        { name: 'zemon-admin', description: 'หน้าจัดการของซีม่อน' }
     ];
     const rest = new REST({ version: '10' }).setToken(TOKEN);
     try { await rest.put(Routes.applicationCommands(client.user.id), { body: commands }); } catch (e) {}
 });
 
 client.on('interactionCreate', async interaction => {
-    // 1. Setup Panels
     if (interaction.commandName === 'zemon-setup') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนเท่านั้นนะค้าบ', ephemeral: true });
         mainPanelMessage = await sendMemberPanel(interaction, false);
     }
     if (interaction.commandName === 'zemon-admin') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนเท่านั้นนะค้าบ', ephemeral: true });
         adminPanelMessage = await updateAdminPanel(interaction, false);
     }
 
-    // 2. Admin Add Button (เด้ง Modal)
     if (interaction.isButton() && interaction.customId === 'admin_add_btn') {
         const modal = new ModalBuilder().setCustomId('modal_add_script').setTitle('📝 เพิ่มสคริปต์');
         modal.addComponents(
@@ -139,53 +138,38 @@ client.on('interactionCreate', async interaction => {
         await interaction.showModal(modal);
     }
 
-    // 3. Modal Submit (บันทึกและรีเฟรช Dropdown อัตโนมัติ)
     if (interaction.isModalSubmit() && interaction.customId === 'modal_add_script') {
-        await interaction.deferReply({ ephemeral: true }); 
         const name = interaction.fields.getTextInputValue('in_name');
         const code = interaction.fields.getTextInputValue('in_code');
         const image = interaction.fields.getTextInputValue('in_img') || null;
-        const translated = await autoTranslate(name);
-        
-        scriptData.push({ name, translated, code, image });
-        
-        await interaction.editReply({ content: `✅ เพิ่มสคริปต์ **${name}** เรียบร้อยแล้วนะซีม่อน!` });
-
-        // รีเฟรชหน้า Panel ทันทีแบบ Real-time
+        scriptData.push({ name, code, image });
+        await interaction.reply({ content: `✅ เพิ่มสคริปต์ **${name}** สำเร็จ!`, ephemeral: true });
         if (adminPanelMessage) await updateAdminPanel(adminPanelMessage, true);
         if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
     }
 
-    // 4. Select Script
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_script') {
         if (interaction.values[0] === 'none') return;
         userSelections.set(interaction.user.id, interaction.values[0]);
         await interaction.deferUpdate(); 
     }
 
-    // 5. Get Script Button (นับเวลาถอยหลัง และ จิ้มคัดลอก)
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ต้องเลือกสคริปต์ก่อนนะค้าบซีม่อน!`, ephemeral: true });
-        
+        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ เลือกสคริปต์ก่อนนะซีม่อน!`, ephemeral: true });
         const script = scriptData[parseInt(selIdx)];
         let timeLeft = 60;
-
         const getEmbed = (time) => new EmbedBuilder()
             .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
             .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลยนะค้าบ:\n\n\`\`\`\n${script.code}\n\`\`\` \n\n⏳ (ข้อความนี้จะถูกลบใน ${time} วินาที)`)
-            .setColor('#ff0000')
-            .setImage(script.image || null)
-            .setThumbnail(MAIN_BANNER);
+            .setColor('#ff0000').setImage(script.image || null).setThumbnail(MAIN_BANNER);
 
         await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true });
-
-        // ระบบนับเวลาถอยหลังและลบข้อความ
         const timer = setInterval(async () => {
             timeLeft -= 10;
             if (timeLeft <= 0) {
                 clearInterval(timer);
-                try { await interaction.deleteReply(); userSelections.delete(interaction.user.id); } catch(e){}
+                try { await interaction.deleteReply(); } catch(e){}
             } else {
                 try { await interaction.editReply({ embeds: [getEmbed(timeLeft)] }); } catch(e){ clearInterval(timer); }
             }
@@ -193,8 +177,5 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-server.listen(port, '0.0.0.0', () => {
-    console.log(`🚀 Monitoring on port ${port}`);
-});
-
+server.listen(port, '0.0.0.0', () => { console.log(`🚀 Monitoring Server running on port ${port}`); });
 client.login(TOKEN);
