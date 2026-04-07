@@ -20,15 +20,25 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// API สำหรับส่งข้อมูลบอทไปแสดงที่หน้าเว็บ
-app.get('/api/botinfo', (req, res) => {
-    if (client.user) {
-        res.json({
-            name: client.user.username,
-            avatar: client.user.displayAvatarURL({ format: 'png', size: 256 })
-        });
-    } else {
-        res.json({ name: "Offline", avatar: "" });
+// API ใหม่: ดึงรายชื่อบอททั้งหมดในเซิร์ฟเวอร์ที่บอทตัวนี้อยู่
+app.get('/api/bots', async (req, res) => {
+    try {
+        // ดึง Guild แรกที่บอทอยู่ (หรือระบุ ID เซิร์ฟเวอร์ได้)
+        const guild = client.guilds.cache.first();
+        if (!guild) return res.json([]);
+
+        await guild.members.fetch(); // อัปเดตรายชื่อสมาชิก
+        const bots = guild.members.cache.filter(member => member.user.bot);
+
+        const botList = bots.map(b => ({
+            name: b.user.username,
+            avatar: b.user.displayAvatarURL({ format: 'png', size: 256 }),
+            status: b.presence?.status || 'offline'
+        }));
+
+        res.json(botList);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch bots" });
     }
 });
 
@@ -37,7 +47,12 @@ app.listen(port, '0.0.0.0', () => {
 });
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers, // ต้องเปิดใน Discord Developer Portal ด้วยนะค้าบ
+        GatewayIntentBits.GuildPresences
+    ],
     partials: [Partials.Channel]
 });
 
@@ -60,7 +75,7 @@ async function autoTranslate(text) {
 }
 
 client.once('ready', async () => {
-    console.log(`🌸 ปายพร้อมรับใช้ซีม่อนแล้วค่ะ! Logged in as ${client.user.tag}`);
+    console.log(`🌸 ปายพร้อมทำงานแล้วค่ะ! Logged in as ${client.user.tag}`);
     const commands = [
         { name: 'zemon-setup', description: 'สร้างหน้า Panel แจกสคริปต์ (Member Panel)' },
         { name: 'zemon-admin', description: 'จัดการสคริปต์ (Admin Panel)' }
@@ -71,11 +86,11 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'zemon-setup') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
         mainPanelMessage = await sendMemberPanel(interaction, false);
     }
     if (interaction.commandName === 'zemon-admin') {
-        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะเจ้าของเท่านั้นนะค้าบ', ephemeral: true });
         adminPanelMessage = await updateAdminPanel(interaction, false);
     }
     if (interaction.isButton() && interaction.customId === 'admin_add_btn') {
@@ -104,7 +119,7 @@ client.on('interactionCreate', async interaction => {
     }
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
+        if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
         const script = scriptData[parseInt(selIdx)];
         let timeLeft = 60;
         const getEmbed = (time) => new EmbedBuilder()
@@ -127,7 +142,7 @@ client.on('interactionCreate', async interaction => {
 async function updateAdminPanel(target, isEdit) {
     const adminEmbed = new EmbedBuilder()
         .setTitle('⚙️ SWIFT HUB - ADMIN')
-        .setDescription(`ยินดีต้อนรับค่ะซีม่อน! จัดการสคริปต์ได้ที่นี่เลย\n\n📊 **รายการปัจจุบัน:** ${scriptData.length} สคริปต์`)
+        .setDescription(`จัดการสคริปต์ได้ที่นี่เลย\n\n📊 **รายการปัจจุบัน:** ${scriptData.length} สคริปต์`)
         .setColor('#ff0000');
     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เพิ่มสคริปต์').setStyle(ButtonStyle.Danger));
     return isEdit ? await target.edit({ embeds: [adminEmbed], components: [row] }) : await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
