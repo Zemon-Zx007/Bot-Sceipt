@@ -4,10 +4,11 @@
   "description": "Discord bot for Zemon by Pai",
   "main": "index.js",
   "dependencies": {
-    "discord.js": "^14.13.0",
-    "@iamtraction/google-translate": "^2.0.1",
+    "discord.js": "^14.14.1",
     "express": "^4.18.2",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "@iamtraction/google-translate": "^2.0.1",
+    "undici": "^6.13.0"
   },
   "scripts": {
     "start": "node index.js"
