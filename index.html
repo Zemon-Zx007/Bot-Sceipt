@@ -3,41 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SWIFT HUB | Real-time Monitoring</title>
+    <title>SWIFT HUB | Monitoring</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root { --main-red: #ff0000; --bg-dark: #0a0a0a; --card-bg: #141414; }
+        :root { --main-red: #ff0000; --bg-dark: #050505; --card-bg: #111111; }
         body {
             margin: 0; padding: 20px 0; background-color: var(--bg-dark);
             color: #ffffff; font-family: 'Kanit', sans-serif;
             display: flex; flex-direction: column; align-items: center; min-height: 100vh;
         }
         .container { width: 90%; max-width: 400px; text-align: center; }
-        h1 { color: var(--main-red); margin: 0; font-size: 32px; text-shadow: 0 0 15px rgba(255,0,0,0.6); }
-        .online-text { color: var(--main-red); font-size: 14px; margin-bottom: 25px; }
-        .dot { height: 8px; width: 8px; background: var(--main-red); border-radius: 50%; display: inline-block; margin-right: 8px; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        h1 { color: var(--main-red); margin: 0; font-size: 32px; text-shadow: 0 0 15px rgba(255,0,0,0.8); letter-spacing: 2px; }
+        .online-text { color: var(--main-red); font-size: 12px; margin-bottom: 30px; letter-spacing: 1px; }
+        .dot { height: 8px; width: 8px; background: var(--main-red); border-radius: 50%; display: inline-block; margin-right: 8px; animation: pulse 1.2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
 
-        #bot-list { width: 100%; display: flex; flex-direction: column; gap: 15px; min-height: 50px; }
+        #bot-list { width: 100%; display: flex; flex-direction: column; gap: 20px; }
         .bot-card {
-            background: var(--card-bg); padding: 20px; border-radius: 20px;
-            border: 1.5px solid var(--main-red); box-shadow: 0 0 20px rgba(255, 0, 0, 0.15);
-            animation: fadeIn 0.4s ease-out;
+            background: var(--card-bg); padding: 25px; border-radius: 25px;
+            border: 1px solid rgba(255, 0, 0, 0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: slideIn 0.5s ease-out; position: relative; overflow: hidden;
         }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        .bot-identity { display: flex; flex-direction: column; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 15px; }
-        .bot-avatar { width: 85px; height: 85px; border-radius: 50%; border: 3px solid var(--main-red); object-fit: cover; margin-bottom: 12px; box-shadow: 0 0 10px var(--main-red); }
-        .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-        .bot-name-val { font-size: 18px; color: #ffffff; font-weight: 500; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .stat-value { font-size: 20px; font-weight: 700; color: var(--main-red); }
+        .bot-identity { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+        .bot-avatar { 
+            width: 90px; height: 90px; border-radius: 50%; 
+            border: 2px solid var(--main-red); object-fit: cover; 
+            margin-bottom: 15px; box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+        }
+        .stat-label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+        .bot-name-val { font-size: 18px; color: #fff; font-weight: 700; }
+        
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 15px; border-top: 1px solid #222; }
+        .stat-item { display: flex; flex-direction: column; }
+        .stat-value { font-size: 18px; font-weight: 700; color: var(--main-red); }
 
-        .welcome-msg { font-size: 13px; color: #bbb; margin: 25px 0; line-height: 1.6; }
-        .btn { display: block; background: var(--main-red); color: white; text-decoration: none; padding: 16px; border-radius: 15px; font-weight: bold; transition: 0.3s; }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,0,0,0.3); }
-        footer { margin-top: 30px; font-size: 10px; color: #444; letter-spacing: 2px; }
+        .welcome-msg { font-size: 13px; color: #888; margin: 30px 0; line-height: 1.6; }
+        .btn { 
+            display: block; background: var(--main-red); color: white; 
+            text-decoration: none; padding: 18px; border-radius: 15px; 
+            font-weight: 800; transition: 0.3s; box-shadow: 0 4px 15px rgba(255,0,0,0.4);
+        }
+        .btn:active { transform: scale(0.95); }
+        footer { margin-top: 40px; font-size: 9px; color: #333; letter-spacing: 3px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -58,41 +68,33 @@
         const listContainer = document.getElementById('bot-list');
 
         socket.on('update-bots', (bots) => {
-            const currentElements = Array.from(listContainer.children);
-            const currentIds = currentElements.map(el => el.dataset.id);
-            const newIds = bots.map(b => b.id);
-
-            // 1. ลบบอทที่ออกไปแล้ว (Real-time ลบออกทันที)
-            currentElements.forEach(el => {
-                if (!newIds.includes(el.dataset.id)) el.remove();
-            });
-
-            // 2. เพิ่มบอทใหม่ (ถ้ายังไม่มีในหน้าเว็บ)
+            listContainer.innerHTML = ''; // ล้างข้อมูลเก่า
+            if (bots.length === 0) {
+                listContainer.innerHTML = '<p style="color:#444">ไม่มีบอทออนไลน์ในขณะนี้</p>';
+                return;
+            }
             bots.forEach(bot => {
-                if (!currentIds.includes(bot.id)) {
-                    const ping = Math.floor(Math.random() * 21) + 20; // สุ่ม 20-40 ms
-                    const stable = (99.7 + Math.random() * 0.2).toFixed(1); // สุ่ม 99.7-99.9%
-                    
-                    const card = `
-                        <div class="bot-card" data-id="${bot.id}">
-                            <div class="bot-identity">
-                                <img src="${bot.avatar}" class="bot-avatar">
-                                <span class="stat-label">BOT NAME</span>
-                                <span class="bot-name-val">${bot.name}</span>
+                const ping = Math.floor(Math.random() * 15) + 20; 
+                const stability = (99.8 + Math.random() * 0.1).toFixed(1);
+                const card = `
+                    <div class="bot-card">
+                        <div class="bot-identity">
+                            <img src="${bot.avatar}" class="bot-avatar">
+                            <span class="stat-label">BOT NAME</span>
+                            <span class="bot-name-val">${bot.name}</span>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-label">LATENCY</span>
+                                <span class="stat-value">${ping} ms</span>
                             </div>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="stat-label">LATENCY</span>
-                                    <span class="stat-value">${ping} ms</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">STABILITY</span>
-                                    <span class="stat-value">${stable}%</span>
-                                </div>
+                            <div class="stat-item">
+                                <span class="stat-label">STABILITY</span>
+                                <span class="stat-value">${stability}%</span>
                             </div>
-                        </div>`;
-                    listContainer.insertAdjacentHTML('beforeend', card);
-                }
+                        </div>
+                    </div>`;
+                listContainer.insertAdjacentHTML('beforeend', card);
             });
         });
     </script>
