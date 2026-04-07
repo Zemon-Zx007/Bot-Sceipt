@@ -5,7 +5,6 @@ const {
     TextInputBuilder, TextInputStyle 
 } = require('discord.js');
 
-// เปลี่ยนมาใช้ตัวนี้แทนนะค้าบซีม่อน แก้ Error ReadableStream โดยเฉพาะเลย
 const translate = require('@iamtraction/google-translate'); 
 
 const client = new Client({
@@ -27,7 +26,6 @@ async function autoTranslate(text) {
     try {
         const isThai = /[ก-ฮ]/.test(text);
         const targetLang = isThai ? 'en' : 'th';
-        // ใช้ Library ตัวใหม่ แปลได้ลื่นเหมือนเดิมแต่ไม่ Error แล้วค่ะ
         const res = await translate(text, { to: targetLang });
         return res.text;
     } catch (e) {
@@ -140,7 +138,7 @@ async function updateAdminPanel(target, isEdit) {
 
 async function sendMemberPanel(target, isUpdate) {
     const scriptList = scriptData.length > 0 
-        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} / ${s.translated} (เวอร์ชั่นไทย)`).join('\n')
+        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} / ${s.translated}`).join('\n')
         : '*ยังไม่มีสคริปต์ในตอนนี้ / No scripts available*';
 
     const embed = new EmbedBuilder()
@@ -154,7 +152,8 @@ async function sendMemberPanel(target, isUpdate) {
                         '━━━━━━━━━━━━━━━━━━━━━━━━━━')
         .setColor('#00ff7f')
         .setImage(MAIN_BANNER)
-        .setFooter({ text: `Powered by Pai & Zemon • อัปเดตล่าสุด | วันนี้ เวลา ${new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}` });
+        .setFooter({ text: `Powered by Pai & Zemon • อัปเดตล่าสุด` })
+        .setTimestamp();
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('select_script')
