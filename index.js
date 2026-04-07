@@ -8,7 +8,7 @@ const translate = require('@iamtraction/google-translate');
 const express = require('express');
 const path = require('path');
 
-// --- แก้ไขปัญหา Error บน Railway ---
+// --- แก้ไขปัญหา Error ReferenceError: ReadableStream บน Railway ---
 if (typeof ReadableStream === 'undefined') {
     const { ReadableStream } = require('node:stream/web');
     global.ReadableStream = ReadableStream;
@@ -18,6 +18,7 @@ if (typeof ReadableStream === 'undefined') {
 const app = express();
 const port = process.env.PORT || 3000;
 
+// ให้ Express ส่งไฟล์ index.html เมื่อมีคนเข้าหน้าเว็บ
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -107,7 +108,7 @@ client.on('interactionCreate', async interaction => {
         const getEmbed = (time) => new EmbedBuilder()
             .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
             .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\n\`${script.code}\` \n\n⏳ (ลบใน ${time} วิ)`)
-            .setColor('#ff0000') // เปลี่ยนเป็นสีแดงตามโทน
+            .setColor('#ff0000') 
             .setImage(script.image || null)
             .setThumbnail(MAIN_BANNER);
 
