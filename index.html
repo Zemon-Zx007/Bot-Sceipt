@@ -23,9 +23,8 @@
         .bot-card {
             background: var(--card-bg); padding: 25px; border-radius: 25px;
             border: 1px solid rgba(255, 0, 0, 0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            animation: slideIn 0.5s ease-out; position: relative; overflow: hidden;
+            position: relative; overflow: hidden;
         }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         .bot-identity { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
         .bot-avatar { 
@@ -38,7 +37,7 @@
         
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 15px; border-top: 1px solid #222; }
         .stat-item { display: flex; flex-direction: column; }
-        .stat-value { font-size: 18px; font-weight: 700; color: var(--main-red); }
+        .stat-value { font-size: 18px; font-weight: 700; color: var(--main-red); transition: 0.5s ease; }
 
         .welcome-msg { font-size: 13px; color: #888; margin: 30px 0; line-height: 1.6; }
         .btn { 
@@ -46,7 +45,6 @@
             text-decoration: none; padding: 18px; border-radius: 15px; 
             font-weight: 800; transition: 0.3s; box-shadow: 0 4px 15px rgba(255,0,0,0.4);
         }
-        .btn:active { transform: scale(0.95); }
         footer { margin-top: 40px; font-size: 9px; color: #333; letter-spacing: 3px; font-weight: bold; }
     </style>
 </head>
@@ -54,10 +52,7 @@
     <div class="container">
         <h1>SWIFT HUB</h1>
         <div class="online-text"><span class="dot"></span> SYSTEM ONLINE</div>
-        
-        <div id="bot-list">
-            </div>
-
+        <div id="bot-list"></div>
         <p class="welcome-msg">สถานะการทำงานของบอทปกติ<br>พร้อมให้บริการซีม่อนและสมาชิกทุกคนแล้วค่ะ!</p>
         <a href="https://discord.com" class="btn">OPEN DISCORD</a>
         <footer>POWERED BY PAI & ZEMON</footer>
@@ -67,15 +62,29 @@
         const socket = io();
         const listContainer = document.getElementById('bot-list');
 
+        // ฟังก์ชันสุ่มตัวเลขให้ดูสมจริง
+        function updateStats() {
+            const latencies = document.querySelectorAll('.latency-val');
+            const stabilities = document.querySelectorAll('.stability-val');
+
+            latencies.forEach(el => {
+                const newVal = Math.floor(Math.random() * 15) + 20; // 20-35ms
+                el.innerText = `${newVal} ms`;
+            });
+
+            stabilities.forEach(el => {
+                const newVal = (99.7 + Math.random() * 0.2).toFixed(1); // 99.7-99.9%
+                el.innerText = `${newVal}%`;
+            });
+        }
+
         socket.on('update-bots', (bots) => {
-            listContainer.innerHTML = ''; // ล้างข้อมูลเก่า
+            listContainer.innerHTML = '';
             if (bots.length === 0) {
                 listContainer.innerHTML = '<p style="color:#444">ไม่มีบอทออนไลน์ในขณะนี้</p>';
                 return;
             }
             bots.forEach(bot => {
-                const ping = Math.floor(Math.random() * 15) + 20; 
-                const stability = (99.8 + Math.random() * 0.1).toFixed(1);
                 const card = `
                     <div class="bot-card">
                         <div class="bot-identity">
@@ -86,17 +95,21 @@
                         <div class="stats-grid">
                             <div class="stat-item">
                                 <span class="stat-label">LATENCY</span>
-                                <span class="stat-value">${ping} ms</span>
+                                <span class="stat-value latency-val">-- ms</span>
                             </div>
                             <div class="stat-item">
                                 <span class="stat-label">STABILITY</span>
-                                <span class="stat-value">${stability}%</span>
+                                <span class="stat-value stability-val">-- %</span>
                             </div>
                         </div>
                     </div>`;
                 listContainer.insertAdjacentHTML('beforeend', card);
             });
+            updateStats(); // รันครั้งแรกทันทีที่โหลดบอทมา
         });
+
+        // สั่งให้ตัวเลขขยับทุกๆ 3 วินาที (เรียลไทม์)
+        setInterval(updateStats, 3000);
     </script>
 </body>
 </html>
