@@ -74,7 +74,9 @@
     <div class="container">
         <h1>SWIFT HUB</h1>
         <div class="online-text"><span class="dot"></span> SYSTEM MONITORING</div>
-        <div id="bot-list"></div>
+        <div id="bot-list">
+            <p style="color:#666">กำลังโหลดข้อมูลจากเซิร์ฟเวอร์...</p>
+        </div>
         <p class="welcome-msg">สถานะการทำงานของบอท<br>อัปเดตแบบ Real-time เพื่อซีม่อนค่ะ!</p>
         <a href="https://discord.com" class="btn">OPEN DISCORD</a>
         <footer>POWERED BY PAI & ZEMON</footer>
@@ -84,23 +86,36 @@
         const socket = io();
         const listContainer = document.getElementById('bot-list');
 
+        // ฟังก์ชันสุ่มตัวเลข (เฉพาะบอทที่ออนไลน์)
+        function updateStats() {
+            document.querySelectorAll('.bot-card:not(.offline-style)').forEach(card => {
+                const latencyEl = card.querySelector('.latency-val');
+                const stabilityEl = card.querySelector('.stability-val');
+                if (latencyEl) latencyEl.innerText = `${Math.floor(Math.random() * 15) + 20} ms`;
+                if (stabilityEl) stabilityEl.innerText = `${(99.7 + Math.random() * 0.2).toFixed(1)}%`;
+            });
+        }
+
         socket.on('update-bots', (bots) => {
             listContainer.innerHTML = '';
             if (!bots || bots.length === 0) {
-                listContainer.innerHTML = `<div class="bot-card" style="opacity:0.5;"><p>ไม่พบข้อมูลบอท</p></div>`;
+                listContainer.innerHTML = `<div class="bot-card" style="opacity:0.5; border-style:dashed;"><p>ไม่พบบอทในระบบ</p></div>`;
                 return;
             }
 
             bots.forEach(bot => {
-                // เช็กสถานะจากข้อมูลที่ Server ส่งมา (online / offline)
-                const isOnline = bot.status === 'online';
+                // เช็กสถานะของแทร่! (online, idle, dnd คือออนไลน์ / นอกนั้นออฟไลน์)
+                const isOnline = bot.status === 'online' || bot.status === 'idle' || bot.status === 'dnd';
+                
                 const statusHTML = isOnline 
                     ? `<div class="status-badge status-online"><span class="status-dot dot-online"></span> ONLINE</div>`
                     : `<div class="status-badge status-offline"><span class="status-dot dot-offline"></span> OFFLINE</div>`;
                 
                 const cardClass = isOnline ? '' : 'offline-style';
-                const latency = isOnline ? `${bot.ping || Math.floor(Math.random() * 20 + 20)} ms` : '-- ms';
-                const stability = isOnline ? `${bot.stability || '99.9'}%` : '0%';
+                
+                // ถ้าออฟไลน์ ปิงกับความเสถียรจะเป็น 0
+                const latencyText = isOnline ? `<span class="stat-value latency-val">-- ms</span>` : `<span class="stat-value">0 ms</span>`;
+                const stabilityText = isOnline ? `<span class="stat-value stability-val">-- %</span>` : `<span class="stat-value">0%</span>`;
 
                 const card = `
                     <div class="bot-card ${cardClass}">
@@ -112,7 +127,7 @@
                         <div class="stats-grid">
                             <div class="stat-item">
                                 <span class="stat-label">LATENCY</span>
-                                <span class="stat-value">${latency}</span>
+                                ${latencyText}
                             </div>
                             <div class="status-container">
                                 <span class="stat-label">STATUS</span>
@@ -120,18 +135,20 @@
                             </div>
                             <div class="stat-item">
                                 <span class="stat-label">STABILITY</span>
-                                <span class="stat-value">${stability}</span>
+                                ${stabilityText}
                             </div>
                         </div>
                     </div>`;
                 listContainer.insertAdjacentHTML('beforeend', card);
             });
+            updateStats();
         });
 
-        // ขอข้อมูลทันทีที่เชื่อมต่อ
         socket.on('connect', () => {
             socket.emit('request-update');
         });
+
+        setInterval(updateStats, 3000);
     </script>
 </body>
 </html>
