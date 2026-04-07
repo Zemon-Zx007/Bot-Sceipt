@@ -4,7 +4,9 @@ const {
     EmbedBuilder, REST, Routes, ModalBuilder, 
     TextInputBuilder, TextInputStyle 
 } = require('discord.js');
-const translate = require('@vitalets/google-translate-api'); // ตัวแปลภาษาตัวตึง
+
+// เปลี่ยนมาใช้ตัวนี้แทนนะค้าบซีม่อน แก้ Error ReadableStream โดยเฉพาะเลย
+const translate = require('@iamtraction/google-translate'); 
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -20,15 +22,17 @@ const userSelections = new Map();
 let mainPanelMessage = null; 
 let adminPanelMessage = null; 
 
-// ✨ ฟังก์ชันแปลภาษาอัจฉริยะโดยปาย
+// ✨ ฟังก์ชันแปลภาษาฉบับปรับปรุงใหม่โดยปาย
 async function autoTranslate(text) {
     try {
         const isThai = /[ก-ฮ]/.test(text);
         const targetLang = isThai ? 'en' : 'th';
+        // ใช้ Library ตัวใหม่ แปลได้ลื่นเหมือนเดิมแต่ไม่ Error แล้วค่ะ
         const res = await translate(text, { to: targetLang });
         return res.text;
     } catch (e) {
-        return text; // ถ้าแปลพลาด ให้ใช้ชื่อเดิมป้องกันบอทค้าง
+        console.log("Translation Error:", e);
+        return text; 
     }
 }
 
@@ -43,6 +47,8 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
+    if (!interaction.isCommand() && !interaction.isButton() && !interaction.isModalSubmit() && !interaction.isStringSelectMenu()) return;
+
     if (interaction.commandName === 'zemon-setup') {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
         mainPanelMessage = await sendMemberPanel(interaction, false);
@@ -63,17 +69,17 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isModalSubmit() && interaction.customId === 'modal_add_script') {
-        await interaction.deferReply({ ephemeral: true }); // รอแปลภาษาแป๊บนึงนะ
+        await interaction.deferReply({ ephemeral: true }); 
         const name = interaction.fields.getTextInputValue('in_name');
         const code = interaction.fields.getTextInputValue('in_code');
         const image = interaction.fields.getTextInputValue('in_img') || null;
         
-        // แปลชื่อรอไว้เลย
         const translated = await autoTranslate(name);
         scriptData.push({ name, translated, code, image });
 
         await interaction.editReply({ content: `✅ เพิ่มสคริปต์ **${name}** เรียบร้อย! (แปล: ${translated})` });
 
+        // อัปเดตหน้าจอทันที
         if (adminPanelMessage) await updateAdminPanel(adminPanelMessage, true);
         if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
     }
@@ -85,73 +91,77 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined) return interaction.reply({ content: `❌ เลือกสคริปต์ก่อนนะค้าบซีม่อน!`, ephemeral: true });
+        if (selIdx === undefined || selIdx === 'none') {
+             return interaction.reply({ content: `❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
+        }
 
         const script = scriptData[parseInt(selIdx)];
         let timeLeft = 60;
 
         const getEmbed = (time) => new EmbedBuilder()
-            .setTitle(`✨ Script: ${script.name}`)
-            .setDescription(`🇹🇭 คัดลอกโค้ด:\n🇺🇸 Copy code:\n\n\`${script.code}\`\n\n⏳ **ลบใน: \`${time}\` วินาที**`)
+            .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
+            .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\`\`\`lua\n${script.code}\n\`\`\`\n⏳ (ข้อความนี้จะลบอัตโนมัติใน ${time} วินาที)`)
             .setColor('#2b2d31')
-            .setImage(script.image || null);
+            .setImage(script.image || null)
+            .setThumbnail(MAIN_BANNER);
 
         await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true });
 
         const timer = setInterval(async () => {
-            timeLeft -= 5;
+            timeLeft -= 10;
             if (timeLeft <= 0) {
                 clearInterval(timer);
                 try { await interaction.deleteReply(); } catch(e){}
             } else {
                 try { await interaction.editReply({ embeds: [getEmbed(timeLeft)] }); } catch(e){ clearInterval(timer); }
             }
-        }, 5000);
+        }, 10000);
     }
 });
 
 async function updateAdminPanel(target, isEdit) {
     const adminEmbed = new EmbedBuilder()
         .setTitle('⚙️ SWIFT HUB - ADMIN SYSTEM')
-        .setDescription('ยินดีต้อนรับค่ะซีม่อน! กดปุ่มเพื่อเติมสคริปต์\nTotal Scripts: ' + scriptData.length)
+        .setDescription(`ยินดีต้อนรับค่ะซีม่อน! กดปุ่มเพื่อเติมสคริปต์ใหม่\nข้อมูลจะถูกอัปเดตไปหน้า Panel สมาชิกทันที\n\n📊 **จำนวนสคริปต์ปัจจุบัน**\n${scriptData.length} รายการ`)
         .setColor('#ff69b4');
 
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เติมสคริปต์ (Add)').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId('admin_add_btn').setLabel('➕ เติมสคริปต์ใหม่').setStyle(ButtonStyle.Primary)
     );
 
-    if (isEdit) {
-        const msg = target.edit ? target : target.message;
-        return await msg.edit({ embeds: [adminEmbed], components: [row] }).catch(()=>{});
-    } else {
-        return await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
-    }
+    try {
+        if (isEdit) {
+            return await target.edit({ embeds: [adminEmbed], components: [row] });
+        } else {
+            return await target.reply({ embeds: [adminEmbed], components: [row], fetchReply: true });
+        }
+    } catch (e) { console.log("Admin Panel Update Error"); }
 }
 
 async function sendMemberPanel(target, isUpdate) {
     const scriptList = scriptData.length > 0 
-        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} / ${s.translated}`).join('\n')
-        : '*ยังไม่มีสคริปต์ในระบบ / No scripts*';
+        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} / ${s.translated} (เวอร์ชั่นไทย)`).join('\n')
+        : '*ยังไม่มีสคริปต์ในตอนนี้ / No scripts available*';
 
     const embed = new EmbedBuilder()
         .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
         .setDescription('━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-                        '📜 **รายชื่อสคริปต์ (Script List):**\n' + scriptList + '\n\n' +
+                        '📜 **สคริปต์ที่มีในตอนนี้ (Script List):**\n' + scriptList + '\n\n' +
                         '👋 **วิธีใช้งาน (How to use):**\n' +
-                        '1️⃣ เลือกสคริปต์ (Select script)\n' +
-                        '2️⃣ กดปุ่มรับโค้ด (Click Get Script)\n\n' +
+                        '1️⃣ เลือกสคริปต์ด้านล่าง (Select script below)\n' +
+                        '2️⃣ กดปุ่มรับสคริปต์ (Click Get Script button)\n\n' +
+                        '📌 หมายเหตุ: จิ้มที่ตัวโค้ดเพื่อคัดลอกทันที\n' +
                         '━━━━━━━━━━━━━━━━━━━━━━━━━━')
         .setColor('#00ff7f')
         .setImage(MAIN_BANNER)
-        .setFooter({ text: 'Powered by Pai & Zemon' })
-        .setTimestamp();
+        .setFooter({ text: `Powered by Pai & Zemon • อัปเดตล่าสุด | วันนี้ เวลา ${new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}` });
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('select_script')
-        .setPlaceholder('📂 --- เลือกสคริปต์ที่นี่ / Select here ---')
+        .setPlaceholder('📂 --- คลิกเพื่อเลือกสคริปต์ที่นี่ / Select script here ---')
         .addOptions(scriptData.length > 0 ? scriptData.map((s, index) => ({
             label: `${index + 1}. ${s.name}`,
-            description: s.translated,
+            description: `แปล: ${s.translated}`,
             value: index.toString(),
         })) : [{ label: 'รอเติมสคริปต์...', value: 'none' }]);
 
@@ -160,12 +170,13 @@ async function sendMemberPanel(target, isUpdate) {
         new ButtonBuilder().setCustomId('get_script_btn').setLabel('📥 รับสคริปต์ (Get Script)').setStyle(ButtonStyle.Success)
     );
 
-    if (isUpdate) {
-        const msg = target.edit ? target : target.message;
-        return await msg.edit({ embeds: [embed], components: [row1, row2] }).catch(()=>{});
-    } else {
-        return await target.reply({ embeds: [embed], components: [row1, row2], fetchReply: true });
-    }
+    try {
+        if (isUpdate) {
+            return await target.edit({ embeds: [embed], components: [row1, row2] });
+        } else {
+            return await target.reply({ embeds: [embed], components: [row1, row2], fetchReply: true });
+        }
+    } catch (e) { console.log("Member Panel Update Error"); }
 }
 
 client.login(TOKEN);
