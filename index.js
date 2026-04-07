@@ -93,13 +93,20 @@ client.on('interactionCreate', async interaction => {
     // --- 5. จัดการ Dropdown เลือกสคริปต์ ---
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_script') {
         userSelections.set(interaction.user.id, interaction.values[0]);
-        await interaction.deferUpdate(); // ไม่ต้องเด้งข้อความตอบรับ
+        await interaction.deferUpdate(); 
     }
 
-    // --- 6. จัดการปุ่มรับสคริปต์ (พร้อม Auto-Delete & Reset Dropdown) ---
+    // --- 6. จัดการปุ่มรับสคริปต์ (แก้ไข Delay ลบข้อความ & รีเซ็ตหน้าจอ) ---
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
-        if (selIdx === undefined) return interaction.reply({ content: '❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!', ephemeral: true });
+        
+        // แก้ไขให้ขึ้นชื่อคนกดแทนชื่อซีม่อน
+        if (selIdx === undefined) {
+            return interaction.reply({ 
+                content: `❌ คุณ <@${interaction.user.id}> ต้องเลือกสคริปต์จากรายการก่อนนะค้าบ!`, 
+                ephemeral: true 
+            });
+        }
 
         const script = scriptData[parseInt(selIdx)];
         
@@ -110,16 +117,23 @@ client.on('interactionCreate', async interaction => {
         
         if (script.image) resEmbed.setImage(script.image);
 
-        // ส่งข้อความสคริปต์
-        const msg = await interaction.reply({ embeds: [resEmbed], ephemeral: true, fetchReply: true });
+        // ส่งข้อความสคริปต์แบบเห็นคนเดียว
+        await interaction.reply({ embeds: [resEmbed], ephemeral: true });
 
-        // ลบข้อมูลที่เลือกไว้ และ รีเซ็ตหน้าจอหลักเพื่อให้ Dropdown กลับเป็นค่าว่าง
-        userSelections.delete(interaction.user.id);
-        await sendMemberPanel(interaction, true);
-
-        // ตั้งเวลาลบข้อความ (สำหรับ Ephemeral จริงๆ Discord จะซ่อนให้เมื่อปิด แต่เราส่งซ้ำเพื่อความชัวร์ในฝั่ง UI)
+        // เริ่มนับถอยหลัง 1 นาที (60000ms) ก่อนจะทำการเคลียร์ทุกอย่าง
         setTimeout(async () => {
-            try { await interaction.deleteReply(); } catch (e) {}
+            try {
+                // 1. ลบตัวเลือกในหน่วยความจำ
+                userSelections.delete(interaction.user.id);
+                
+                // 2. ลบข้อความสคริปต์ที่ส่งให้ (Ephemeral)
+                await interaction.deleteReply().catch(() => {});
+                
+                // 3. รีเซ็ตหน้าจอ Panel หลักให้กลับเป็นค่าเริ่มต้น (ไม่ให้ชื่อสคริปต์ค้างในดรอปดาวน์)
+                await sendMemberPanel(interaction, true);
+            } catch (e) {
+                console.log("Error during reset delay:", e);
+            }
         }, 60000);
     }
 });
@@ -135,7 +149,7 @@ async function sendMemberPanel(interaction, isEdit) {
                         '📌 *หมายเหตุ: จิ้มที่ตัวโค้ดเพื่อคัดลอกทันที*\n\n' +
                         '━━━━━━━━━━━━━━━━━━━━━━━━━━')
         .setColor('#00ff7f')
-        .setThumbnail('https://cdn.discordapp.com/emojis/1105151516052062258.webp') // ตัวอย่างไอคอนสวยๆ
+        .setThumbnail('https://cdn.discordapp.com/emojis/1105151516052062258.webp') 
         .setFooter({ text: 'Powered by Pai & Zemon • 24/7 Service' });
 
     const selectMenu = new StringSelectMenuBuilder()
@@ -143,9 +157,9 @@ async function sendMemberPanel(interaction, isEdit) {
         .setPlaceholder('📂 --- คลิกเพื่อเลือกสคริปต์ที่นี่ ---')
         .addOptions(scriptData.length > 0 ? scriptData.map((s, index) => ({
             label: `📜 ${s.name}`,
-            description: `รับโค้ดสคริปต์ ${s.name}`,
+            description: `กดเพื่อเลือกสคริปต์ ${s.name}`,
             value: index.toString(),
-        })) : [{ label: 'ยังไม่มีสคริปต์', value: 'none' }]);
+        })) : [{ label: 'ยังไม่มีสคริปต์ในระบบ', value: 'none' }]);
 
     const row1 = new ActionRowBuilder().addComponents(selectMenu);
     const row2 = new ActionRowBuilder().addComponents(
@@ -153,7 +167,8 @@ async function sendMemberPanel(interaction, isEdit) {
     );
 
     if (isEdit) {
-        await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+        // ใช้การแก้ไขข้อความเดิมของบอทเพื่อรีเซ็ตหน้าจอ
+        await interaction.message.edit({ embeds: [embed], components: [row1, row2] }).catch(() => {});
     } else {
         await interaction.reply({ embeds: [embed], components: [row1, row2] });
     }
