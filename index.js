@@ -18,7 +18,6 @@ if (typeof ReadableStream === 'undefined') {
 const app = express();
 const port = process.env.PORT || 3000;
 
-// ให้ Express ส่งไฟล์ index.html เมื่อมีคนเข้าหน้าเว็บ
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
