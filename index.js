@@ -24,19 +24,20 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 const OWNER_ID = process.env.OWNER_ID;
 
-// ตัวเก็บข้อมูลสคริปต์ (ชั่วคราว)
+// ตัวเก็บข้อมูลสคริปต์ (ชื่อ และ โค้ด)
 let scriptData = []; 
+// ตัวเก็บว่าใครกำลังเลือกสคริปต์ไหนอยู่ (ใช้เก็บชั่วคราว)
+const userSelections = new Map();
 
 client.once('ready', async () => {
     console.log(`Pai is ready! Logged in as ${client.user.tag}`);
     
-    // ลงทะเบียนคำสั่ง Slash Commands
     const commands = [
         new SlashCommandBuilder()
-            .setName('setup-panel')
+            .setName('zemon-setup') // เปลี่ยนชื่อคำสั่งให้เท่ๆ ตามใจซีม่อน
             .setDescription('สร้างหน้า Panel แจกสคริปต์ (เฉพาะซีม่อน)'),
         new SlashCommandBuilder()
-            .setName('add-script')
+            .setName('zemon-add') // คำสั่งหลังบ้านสำหรับเติมสคริปต์
             .setDescription('เพิ่มสคริปต์ใหม่เข้าระบบ (เฉพาะซีม่อน)')
     ];
 
@@ -50,25 +51,25 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async interaction => {
-    // 1. คำสั่งสร้าง Panel (/setup-panel)
-    if (interaction.commandName === 'setup-panel') {
+    // 1. คำสั่งสร้าง Panel (/zemon-setup)
+    if (interaction.commandName === 'zemon-setup') {
         if (interaction.user.id !== OWNER_ID) {
             return interaction.reply({ content: 'คำสั่งนี้เฉพาะซีม่อนเท่านั้นนะค้าบ!', ephemeral: true });
         }
 
         if (scriptData.length === 0) {
-            return interaction.reply({ content: 'ยังไม่มีสคริปต์ในระบบเลยซีม่อน เพิ่มสคริปต์ก่อนนะ!', ephemeral: true });
+            return interaction.reply({ content: 'ยังไม่มีสคริปต์ในระบบเลยซีม่อน เติมสคริปต์ก่อนนะค้าบ!', ephemeral: true });
         }
 
         const embed = new EmbedBuilder()
             .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
-            .setDescription('เลือกสคริปต์ที่ต้องการจากรายการด้านล่าง แล้วกดปุ่มรับโค้ดได้เลย!')
+            .setDescription('เลือกสคริปต์ที่ต้องการจากรายการด้านล่าง แล้วกดปุ่มรับโค้ดได้เลย!\n(จิ้มที่โค้ดเพื่อคัดลอกอัตโนมัติ)')
             .setColor('#2b2d31')
             .setFooter({ text: 'Powered by Pai & Zemon' });
 
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('select_script')
-            .setPlaceholder('เลือกสคริปต์ที่นี่...')
+            .setPlaceholder('--- เลือกรายชื่อสคริปต์ที่นี่ ---')
             .addOptions(scriptData.map((s, index) => ({
                 label: s.name,
                 value: index.toString(),
@@ -85,23 +86,23 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ embeds: [embed], components: [row1, row2] });
     }
 
-    // 2. คำสั่งเพิ่มสคริปต์ (/add-script) - ใช้ Modal เพื่อให้พิมพ์โค้ดได้เยอะ
-    if (interaction.commandName === 'add-script') {
+    // 2. คำสั่งเพิ่มสคริปต์หลังบ้าน (/zemon-add)
+    if (interaction.commandName === 'zemon-add') {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะจ๊ะ', ephemeral: true });
 
         const modal = new ModalBuilder()
             .setCustomId('add_script_modal')
-            .setTitle('เพิ่มสคริปต์ใหม่');
+            .setTitle('เติมสคริปต์เข้า Panel');
 
         const nameInput = new TextInputBuilder()
             .setCustomId('script_name')
-            .setLabel("ชื่อสคริปต์")
+            .setLabel("ชื่อสคริปต์ (จะแสดงใน Dropdown)")
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
         const codeInput = new TextInputBuilder()
             .setCustomId('script_code')
-            .setLabel("โค้ดสคริปต์ (Copy & Paste)")
+            .setLabel("โค้ดสคริปต์ (ใส่โค้ดที่นี่ได้เลย)")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
@@ -109,50 +110,38 @@ client.on('interactionCreate', async interaction => {
         await interaction.showModal(modal);
     }
 
-    // จัดการการส่ง Modal
+    // จัดการการส่ง Modal (บันทึกสคริปต์)
     if (interaction.isModalSubmit() && interaction.customId === 'add_script_modal') {
         const name = interaction.fields.getTextInputValue('script_name');
         const code = interaction.fields.getTextInputValue('script_code');
         
         scriptData.push({ name, code });
-        await interaction.reply({ content: `✅ เพิ่มสคริปต์ "${name}" เรียบร้อยแล้วค่ะซีม่อน! อย่าลืมกด /setup-panel ใหม่นะ`, ephemeral: true });
+        await interaction.reply({ content: `✅ บันทึกสคริปต์ "${name}" เรียบร้อย! ตอนนี้ใน Dropdown จะมีชื่อนี้ขึ้นแล้วนะซีม่อน`, ephemeral: true });
     }
 
-    // จัดการ Dropdown และ ปุ่ม
-    let selectedScriptIndex = new Map(); // เก็บชั่วคราวว่าใครเลือกอันไหน
-
+    // จัดการเมื่อมีการเลือก Dropdown
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_script') {
-        selectedScriptIndex.set(interaction.user.id, interaction.values[0]);
-        await interaction.reply({ content: `เลือกสคริปต์เรียบร้อย! กดปุ่มรับโค้ดได้เลยค่ะ`, ephemeral: true });
+        userSelections.set(interaction.user.id, interaction.values[0]);
+        await interaction.reply({ content: `เลือกสคริปต์เรียบร้อย! อย่าลืมกดปุ่มสีเขียวเพื่อรับโค้ดนะค้าบ`, ephemeral: true });
     }
 
+    // จัดการเมื่อกดปุ่มรับสคริปต์
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
-        // ดึงค่าล่าสุดที่ user เลือกใน dropdown (ใช้แคชง่ายๆ หรือดึงจาก interaction)
-        // เพื่อความง่ายในตัวอย่างนี้ ปายจะใช้วิธีเช็คจาก interaction ล่าสุด
-        const index = interaction.message.components[0].components[0].data.options.find(opt => opt.default === true) || 0; 
+        const selectionIndex = userSelections.get(interaction.user.id);
         
-        // หมายเหตุ: ในระบบจริงควรใช้ Database หรือ Map เพื่อความแม่นยำ
-        // แต่สำหรับคำสั่งนี้ ปายส่งวิธีที่ง่ายที่สุดให้ซีม่อนก่อนค่ะ
+        if (selectionIndex === undefined) {
+            return interaction.reply({ content: 'ซีม่อนต้องเลือกสคริปต์จากรายการด้านบนก่อนนะค้าบ!', ephemeral: true });
+        }
+
+        const script = scriptData[parseInt(selectionIndex)];
         
+        // ส่งข้อความแบบ Ephemeral (เห็นคนเดียว) 
+        // ใส่เครื่องหมาย ` คร่อมหัวท้ายเพื่อให้กดจิ้มแล้วคัดลอกอัตโนมัติในมือถือ
         await interaction.reply({ 
-            content: "ขออภัยค่ะซีม่อน ระบบปุ่มรับสคริปต์กำลังรอคุณเลือกเมนูอีกครั้งเพื่อความชัวร์ (แนะนำให้ลองรันดูก่อนน้า)", 
+            content: `✨ **ชื่อสคริปต์:** ${script.name}\n\nจิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\`${script.code}\``, 
             ephemeral: true 
         });
     }
-});
-
-// แก้ไขฟังก์ชันรับสคริปต์ให้สมบูรณ์
-client.on('interactionCreate', async i => {
-    if (!i.isButton() || i.customId !== 'get_script_btn') return;
-    
-    // ค้นหาว่าคนกดเคยเลือกอะไรไว้ (ในขั้นตอนนี้ปายใช้ระบบจำลองให้ก่อน)
-    // ตรงนี้สำคัญ: ปายจะส่งสคริปต์ในรูปแบบ Markdown Code Block ซึ่งใน Discord มือถือ 
-    // ถ้าเราจิ้มค้างที่ code block มันจะคัดลอกให้ทันทีเลยค่ะ!
-    
-    await i.reply({ 
-        content: `นี่คือสคริปต์ของคุณค่ะ:\n\`\`\`lua\n-- [ จิ้มที่นี่เพื่อคัดลอก ]\nprint("Hello Zemon!")\n\`\`\``, 
-        ephemeral: true 
-    });
 });
 
 client.login(TOKEN);
