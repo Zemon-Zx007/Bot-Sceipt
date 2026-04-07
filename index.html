@@ -39,20 +39,22 @@
             flex-direction: column;
             align-items: center;
         }
-        /* สไตล์รูปวงกลม */
         .bot-avatar {
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            border: 2px solid #ff0000;
+            border: 3px solid #ff0000;
+            margin-top: 10px;
             margin-bottom: 10px;
             object-fit: cover;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+            background: #000; /* กันรูปไม่โหลด */
         }
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
+            padding: 0 15px 15px 15px;
         }
         .stat-item { text-align: center; }
         .stat-label { font-size: 11px; color: #888; display: block; text-transform: uppercase; }
@@ -85,18 +87,18 @@
         
         <div class="status-box">
             <div class="bot-identity">
-                <img src="https://cdn.discordapp.com/attachments/1480814533214732308/1491139952409448498/IMG_2030.gif" class="bot-avatar" alt="Bot Logo">
+                <img id="botAvatar" src="" class="bot-avatar" style="display: none;" alt="Bot Avatar">
                 <span class="stat-label">BOT NAME</span>
-                <span class="bot-name-val">Get Script | Swift Hub</span>
+                <span id="botName" class="bot-name-val">Loading...</span>
             </div>
-            <div class="stats-grid" style="padding: 0 15px 15px 15px;">
+            <div class="stats-grid">
                 <div class="stat-item">
                     <span class="stat-label">LATENCY</span>
                     <span class="stat-value" id="ping">-- ms</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-label">STABILITY</span>
-                    <span class="stat-value" id="stable">99.9%</span>
+                    <span class="stat-value" id="stable">--%</span>
                 </div>
             </div>
         </div>
@@ -110,12 +112,31 @@
     </div>
 
     <script>
+        // ดึงข้อมูลบอทจาก API หลังบ้าน
+        async function fetchBotInfo() {
+            try {
+                const response = await fetch('/api/botinfo');
+                const data = await response.json();
+                if (data.avatar) {
+                    const img = document.getElementById('botAvatar');
+                    img.src = data.avatar;
+                    img.style.display = 'block';
+                    document.getElementById('botName').innerText = data.name;
+                }
+            } catch (err) {
+                console.error("โหลดข้อมูลบอทไม่สำเร็จ");
+                document.getElementById('botName').innerText = "Swift Hub Bot";
+            }
+        }
+
         function updateStats() {
             const ping = Math.floor(Math.random() * (45 - 25 + 1)) + 25;
             document.getElementById('ping').innerText = ping + ' ms';
             const stable = (Math.random() * (99.9 - 99.8) + 99.8).toFixed(1);
             document.getElementById('stable').innerText = stable + '%';
         }
+
+        fetchBotInfo();
         setInterval(updateStats, 2000);
         updateStats();
     </script>
