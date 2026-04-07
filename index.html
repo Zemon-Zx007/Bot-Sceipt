@@ -33,8 +33,21 @@
         }
         .bot-identity {
             border-bottom: 1px solid #333;
-            padding-bottom: 10px;
+            padding-bottom: 15px;
             margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        /* สไตล์รูปวงกลม */
+        .bot-avatar {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid #ff0000;
+            margin-bottom: 10px;
+            object-fit: cover;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
         }
         .stats-grid {
             display: grid;
@@ -71,7 +84,8 @@
         <div class="online-text"><span class="dot"></span> SYSTEM ONLINE</div>
         
         <div class="status-box">
-            <div class="bot-identity" style="padding: 15px 0;">
+            <div class="bot-identity">
+                <img src="https://cdn.discordapp.com/attachments/1480814533214732308/1491139952409448498/IMG_2030.gif" class="bot-avatar" alt="Bot Logo">
                 <span class="stat-label">BOT NAME</span>
                 <span class="bot-name-val">Get Script | Swift Hub</span>
             </div>
@@ -97,15 +111,12 @@
 
     <script>
         function updateStats() {
-            // สุ่มค่า Ping ให้ดูเรียลไทม์ (25-45 ms)
             const ping = Math.floor(Math.random() * (45 - 25 + 1)) + 25;
             document.getElementById('ping').innerText = ping + ' ms';
-            
-            // สุ่มความเสถียรนิดหน่อย (99.8 - 99.9%)
             const stable = (Math.random() * (99.9 - 99.8) + 99.8).toFixed(1);
             document.getElementById('stable').innerText = stable + '%';
         }
-        setInterval(updateStats, 2000); // อัปเดตทุก 2 วินาที
+        setInterval(updateStats, 2000);
         updateStats();
     </script>
 </body>
