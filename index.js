@@ -4,8 +4,20 @@ const {
     EmbedBuilder, REST, Routes, ModalBuilder, 
     TextInputBuilder, TextInputStyle 
 } = require('discord.js');
-
 const translate = require('@iamtraction/google-translate'); 
+const express = require('express'); // เพิ่มตรงนี้ค้าบ
+const path = require('path'); // เพิ่มตรงนี้ค้าบ
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// ระบบหน้าเว็บสวยๆ ของซีม่อน
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+app.listen(port, () => {
+    console.log(`🌐 หน้าเว็บออนไลน์แล้วที่ Port: ${port}`);
+});
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -104,7 +116,6 @@ client.on('interactionCreate', async interaction => {
                 clearInterval(timer);
                 try { 
                     await interaction.deleteReply();
-                    // รีเซ็ต Dropdown ในหน้าหลัก
                     userSelections.delete(interaction.user.id);
                     if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
                 } catch(e){}
