@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root { --main-red: #ff0000; --bg-dark: #050505; --card-bg: #111111; }
+        :root { --main-red: #ff0000; --bg-dark: #050505; --card-bg: #111111; --status-green: #00ff88; }
         body {
             margin: 0; padding: 20px 0; background-color: var(--bg-dark);
             color: #ffffff; font-family: 'Kanit', sans-serif;
@@ -28,16 +28,36 @@
 
         .bot-identity { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
         .bot-avatar { 
-            width: 90px; height: 90px; border-radius: 50%; 
+            width: 80px; height: 80px; border-radius: 50%; 
             border: 2px solid var(--main-red); object-fit: cover; 
-            margin-bottom: 15px; box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+            margin-bottom: 12px; box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
         }
         .stat-label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
-        .bot-name-val { font-size: 18px; color: #fff; font-weight: 700; }
+        .bot-name-val { font-size: 18px; color: #fff; font-weight: 700; margin-bottom: 15px; }
         
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 15px; border-top: 1px solid #222; }
+        /* สไตล์ Stats Grid ใหม่ที่มี Status ตรงกลาง */
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr 1fr; 
+            gap: 5px; 
+            padding-top: 15px; 
+            border-top: 1px solid #222; 
+            align-items: center;
+        }
         .stat-item { display: flex; flex-direction: column; }
-        .stat-value { font-size: 18px; font-weight: 700; color: var(--main-red); transition: 0.5s ease; }
+        .stat-value { font-size: 16px; font-weight: 700; color: var(--main-red); }
+        
+        /* สไตล์สถานะ ONLINE / OFFLINE */
+        .status-container { display: flex; flex-direction: column; align-items: center; }
+        .status-badge { 
+            font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 8px; 
+            display: flex; align-items: center; gap: 4px; 
+        }
+        .status-online { color: var(--status-green); background: rgba(0, 255, 136, 0.1); }
+        .status-offline { color: #ff4444; background: rgba(255, 68, 68, 0.1); }
+        .status-dot { height: 6px; width: 6px; border-radius: 50%; }
+        .dot-online { background: var(--status-green); box-shadow: 0 0 8px var(--status-green); }
+        .dot-offline { background: #ff4444; }
 
         .welcome-msg { font-size: 13px; color: #888; margin: 30px 0; line-height: 1.6; }
         .btn { 
@@ -62,18 +82,13 @@
         const socket = io();
         const listContainer = document.getElementById('bot-list');
 
-        // ฟังก์ชันสุ่มตัวเลขให้ดูสมจริง
         function updateStats() {
-            const latencies = document.querySelectorAll('.latency-val');
-            const stabilities = document.querySelectorAll('.stability-val');
-
-            latencies.forEach(el => {
-                const newVal = Math.floor(Math.random() * 15) + 20; // 20-35ms
+            document.querySelectorAll('.latency-val').forEach(el => {
+                const newVal = Math.floor(Math.random() * 15) + 20;
                 el.innerText = `${newVal} ms`;
             });
-
-            stabilities.forEach(el => {
-                const newVal = (99.7 + Math.random() * 0.2).toFixed(1); // 99.7-99.9%
+            document.querySelectorAll('.stability-val').forEach(el => {
+                const newVal = (99.7 + Math.random() * 0.2).toFixed(1);
                 el.innerText = `${newVal}%`;
             });
         }
@@ -81,10 +96,14 @@
         socket.on('update-bots', (bots) => {
             listContainer.innerHTML = '';
             if (bots.length === 0) {
-                listContainer.innerHTML = '<p style="color:#444">ไม่มีบอทออนไลน์ในขณะนี้</p>';
+                listContainer.innerHTML = `
+                    <div class="bot-card" style="border-style: dashed; opacity: 0.5;">
+                        <p style="color:#666; margin:0;">ไม่มีบอทเชื่อมต่อในขณะนี้</p>
+                    </div>`;
                 return;
             }
             bots.forEach(bot => {
+                // บอทที่ส่งมาจาก socket.io ในที่นี้คือบอทที่ออนไลน์อยู่
                 const card = `
                     <div class="bot-card">
                         <div class="bot-identity">
@@ -97,6 +116,12 @@
                                 <span class="stat-label">LATENCY</span>
                                 <span class="stat-value latency-val">-- ms</span>
                             </div>
+                            <div class="status-container">
+                                <span class="stat-label">STATUS</span>
+                                <div class="status-badge status-online">
+                                    <span class="status-dot dot-online"></span> ONLINE
+                                </div>
+                            </div>
                             <div class="stat-item">
                                 <span class="stat-label">STABILITY</span>
                                 <span class="stat-value stability-val">-- %</span>
@@ -105,10 +130,9 @@
                     </div>`;
                 listContainer.insertAdjacentHTML('beforeend', card);
             });
-            updateStats(); // รันครั้งแรกทันทีที่โหลดบอทมา
+            updateStats();
         });
 
-        // สั่งให้ตัวเลขขยับทุกๆ 3 วินาที (เรียลไทม์)
         setInterval(updateStats, 3000);
     </script>
 </body>
