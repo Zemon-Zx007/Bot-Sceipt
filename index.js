@@ -8,18 +8,28 @@ const translate = require('@iamtraction/google-translate');
 const express = require('express');
 const path = require('path');
 
-// --- แก้ไขปัญหา Error ReferenceError: ReadableStream บน Railway ---
 if (typeof ReadableStream === 'undefined') {
     const { ReadableStream } = require('node:stream/web');
     global.ReadableStream = ReadableStream;
 }
-// ---------------------------------
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// API สำหรับส่งข้อมูลบอทไปแสดงที่หน้าเว็บ
+app.get('/api/botinfo', (req, res) => {
+    if (client.user) {
+        res.json({
+            name: client.user.username,
+            avatar: client.user.displayAvatarURL({ format: 'png', size: 256 })
+        });
+    } else {
+        res.json({ name: "Offline", avatar: "" });
+    }
 });
 
 app.listen(port, '0.0.0.0', () => {
@@ -64,12 +74,10 @@ client.on('interactionCreate', async interaction => {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
         mainPanelMessage = await sendMemberPanel(interaction, false);
     }
-
     if (interaction.commandName === 'zemon-admin') {
         if (interaction.user.id !== OWNER_ID) return interaction.reply({ content: 'เฉพาะซีม่อนนะค้าบ', ephemeral: true });
         adminPanelMessage = await updateAdminPanel(interaction, false);
     }
-
     if (interaction.isButton() && interaction.customId === 'admin_add_btn') {
         const modal = new ModalBuilder().setCustomId('modal_add_script').setTitle('📝 เพิ่มสคริปต์');
         modal.addComponents(
@@ -79,7 +87,6 @@ client.on('interactionCreate', async interaction => {
         );
         await interaction.showModal(modal);
     }
-
     if (interaction.isModalSubmit() && interaction.customId === 'modal_add_script') {
         await interaction.deferReply({ ephemeral: true }); 
         const name = interaction.fields.getTextInputValue('in_name');
@@ -91,37 +98,25 @@ client.on('interactionCreate', async interaction => {
         if (adminPanelMessage) await updateAdminPanel(adminPanelMessage, true);
         if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
     }
-
     if (interaction.isStringSelectMenu() && interaction.customId === 'select_script') {
         userSelections.set(interaction.user.id, interaction.values[0]);
         await interaction.deferUpdate(); 
     }
-
     if (interaction.isButton() && interaction.customId === 'get_script_btn') {
         const selIdx = userSelections.get(interaction.user.id);
         if (selIdx === undefined || selIdx === 'none') return interaction.reply({ content: `❌ ซีม่อนต้องเลือกสคริปต์ก่อนนะค้าบ!`, ephemeral: true });
-
         const script = scriptData[parseInt(selIdx)];
         let timeLeft = 60;
-
         const getEmbed = (time) => new EmbedBuilder()
             .setTitle(`✨ ชื่อสคริปต์: ${script.name}`)
             .setDescription(`จิ้มที่โค้ดด้านล่างเพื่อคัดลอกได้เลย:\n\n\`${script.code}\` \n\n⏳ (ลบใน ${time} วิ)`)
-            .setColor('#ff0000') 
-            .setImage(script.image || null)
-            .setThumbnail(MAIN_BANNER);
-
+            .setColor('#ff0000').setImage(script.image || null).setThumbnail(MAIN_BANNER);
         await interaction.reply({ embeds: [getEmbed(timeLeft)], ephemeral: true });
-
         const timer = setInterval(async () => {
             timeLeft -= 10;
             if (timeLeft <= 0) {
                 clearInterval(timer);
-                try { 
-                    await interaction.deleteReply();
-                    userSelections.delete(interaction.user.id);
-                    if (mainPanelMessage) await sendMemberPanel(mainPanelMessage, true);
-                } catch(e){}
+                try { await interaction.deleteReply(); userSelections.delete(interaction.user.id); } catch(e){}
             } else {
                 try { await interaction.editReply({ embeds: [getEmbed(timeLeft)] }); } catch(e){ clearInterval(timer); }
             }
@@ -139,9 +134,7 @@ async function updateAdminPanel(target, isEdit) {
 }
 
 async function sendMemberPanel(target, isUpdate) {
-    const scriptList = scriptData.length > 0 
-        ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} (${s.translated})`).join('\n')
-        : '*ยังไม่มีสคริปต์*';
+    const scriptList = scriptData.length > 0 ? scriptData.map((s, i) => `**${i + 1}.** ${s.name} (${s.translated})`).join('\n') : '*ยังไม่มีสคริปต์*';
     const embed = new EmbedBuilder()
         .setTitle('💎 SWIFT HUB - SCRIPT CENTER')
         .setDescription('━━━━━━━━━━━━━━━━━━━━\n\n📜 **รายการสคริปต์:**\n' + scriptList + '\n\n━━━━━━━━━━━━━━━━━━━━')
